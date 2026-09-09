@@ -97,7 +97,7 @@ if [ "$HAVE_PSQL" = 1 ]; then
     [ -n "${GITBUCKET_ADMIN_PASSWORD:-}" ] || \
       die "GITBUCKET_ADMIN_PASSWORD must be set on the first boot against a new database."
 
-    log "first boot against this database: building the schema on 127.0.0.1:${BOOT_PORT}"
+    log "first boot against this database: building the schema on loopback:${BOOT_PORT}"
     (
       unset GITBUCKET_SSH GITBUCKET_SSH_HOST GITBUCKET_SSH_PORT \
             GITBUCKET_SSH_BINDADDRESS_HOST GITBUCKET_SSH_BINDADDRESS_PORT \
@@ -108,7 +108,10 @@ if [ "$HAVE_PSQL" = 1 ]; then
 
     ready=0
     for i in $(seq 1 180); do
-      if curl -fsS -o /dev/null "http://127.0.0.1:${BOOT_PORT}/signin"; then ready=1; break; fi
+      # Probe by name, not by literal: JettyLauncher passes --host through
+      # InetAddress.getHostName(), so 127.0.0.1 becomes "localhost" and the
+      # connector binds whichever family the JVM prefers.
+      if curl -fs -o /dev/null "http://localhost:${BOOT_PORT}/signin"; then ready=1; break; fi
       if ! kill -0 "$BOOT_PID" 2>/dev/null; then die "the bootstrap instance exited before it served a page"; fi
       sleep 2
     done
