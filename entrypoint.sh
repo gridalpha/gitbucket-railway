@@ -139,9 +139,15 @@ if [ "$HAVE_PSQL" = 1 ]; then
     [ -n "$COL_USER" ] && [ -n "$COL_PW" ] || die "GitBucket's ACCOUNT table has no user_name/password column"
     log "account table resolved as ${TBL}"
 
+    # psql performs no variable interpolation inside -c, so both values are
+    # inlined. Each is a 40-character sha1 in hex, so there is nothing to quote.
     HASH="$(printf '%s' "$GITBUCKET_ADMIN_PASSWORD" | sha1sum | cut -d' ' -f1)"
-    CHANGED="$(psql -qtAX -v ON_ERROR_STOP=1 -v h="$HASH" -v d="$DEFAULT_ROOT_SHA1" \
-      -c "UPDATE ${TBL} SET ${COL_PW} = :'h' WHERE ${COL_USER} = 'root' AND ${COL_PW} = :'d' RETURNING ${COL_USER};" \
+    case "$HASH" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) : ;;
+      *) die "unexpected sha1sum output" ;;
+    esac
+    CHANGED="$(psql -qtAX -v ON_ERROR_STOP=1 \
+      -c "UPDATE ${TBL} SET ${COL_PW} = '${HASH}' WHERE ${COL_USER} = 'root' AND ${COL_PW} = '${DEFAULT_ROOT_SHA1}' RETURNING ${COL_USER};" \
       | tr -d '[:space:]')"
 
     kill "$BOOT_PID" 2>/dev/null || true
